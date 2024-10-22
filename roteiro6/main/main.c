@@ -1,17 +1,3 @@
-// EEL7030 - Microprocessadores
-// Professores: Eduardo Bezerra, Lucas Kieslich e Raul Guedert
-// Placa utilizada: ESP32 C3 Super Mini
-
-// 
-// ROTEIRO 6 - Interrupção Externa
-//
-
-// Informação importante em relação ao simulador:
-
-// A frequência de clock do simulador está definida como 10x menor do que a placa física
-// Isso é necessário para tornar a simulação mais rápida. É possível alterar a frequência
-// acessando o arquivo diagram.json no campo "cpuFrequency". A frequência ali descrita está
-// em MHz. Ex.: "cpuFrequency": "16" = 16 MHz.
 
 #include <stdio.h>
 #include "driver/gpio.h"
