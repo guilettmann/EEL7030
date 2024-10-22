@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include "driver/gpio.h"
 #include "soc/gpio_reg.h"
@@ -16,51 +15,77 @@ void LCD_escreve_strings(char str1[], char str2[]);
 ******************** FIM DO COMPONENTE LCD_DISPLAY ********************
 */
 
-int isInterrupt = 0;
+int INTERRUPT_PIN = 10;
+int interrupt = 0;
 
-void delay(int ms){
-  for(volatile int i = 0; (i < ms*100); i++); // 10x menor devido ao clock
-}
+static void gpio_isr_handler(void* arg) {
+  interrupt = !interrupt;
+};
 
-static void funcao_de_tratamento(void* arg) {
-  isInterrupt = 1;
-}
+void delay(int ms);
+int tamanho_string(char str[]);
+void rotaciona_string(char string_original[], int tamanho_original, int rotacao, char string_rotacionada[]);
 
 void app_main(){
+    gpio_config_t io_conf;
+    io_conf.intr_type = GPIO_INTR_NEGEDGE;
+    io_conf.pin_bit_mask = (1 << INTERRUPT_PIN);
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
 
-  int n = 0;
-  char nstr[20];
-  char line1[] = "Bruno";
-  char line2[] = "Mamador";
-  char ittr1[] = "Interrupcaoo";
-  char ittr2[] = "Ativada";
-  
-  gpio_config_t io_conf; 
-  io_conf.intr_type = GPIO_INTR_POSEDGE;
-  io_conf.pin_bit_mask = (1 << 10); 
-  io_conf.mode = GPIO_MODE_INPUT; 
-  io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
-  io_conf.pull_up_en = GPIO_PULLUP_DISABLE; 
+    gpio_config(&io_conf);
+    gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
+    gpio_isr_handler_add(INTERRUPT_PIN, gpio_isr_handler, NULL);
+    
+    char string_original[] = "P1 24.2 - Microprocessadores "; // Esse espaço final pode ser tratado nas outras funções também (mas é mais simples colocá-lo aqui)
+    int tamanho_original = tamanho_string(string_original); // Calcula o tamanho da string original (pode usar sizeof também, mas cuidar com o caractere nulo)
+    char string_rotacionada[17]; // Cria um buffer para armazenar a string rotacionada no LCD com 16 posições (um caractere a mais para adicionar o nulo)
 
-  gpio_config(&io_conf);
-  gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
-  gpio_isr_handler_add(10, funcao_de_tratamento, NULL);
+    LCD_inicializa_4_bits(8, 9, 0, 1, 2, 3);
+    LCD_escreve_strings(string_original, " ");
 
-  LCD_inicializa_4_bits(8, 9, 0, 1, 2, 3);
+    int n = 0;
 
-  while(1){
-    if (isInterrupt == 1){
-      n=0;
-      delay(100);
-      isInterrupt = 0;
-    }
-    else{
-      LCD_escreve_strings("Contagem", nstr);
-    }
-    sprintf(nstr, "%d", n);  // Converte o número para string
-    n++;
-  }
+    while(1){
+      while (interrupt == 1) {
+      rotaciona_string(string_original, tamanho_original, n, string_rotacionada);
+		  LCD_escreve_strings(string_rotacionada, " ");
+		  delay(5000);
+
+      if (n >= (tamanho_original)){
+        n = 1;
+      } else {
+        n++;
+      }
+	  }
+    };
 }
+
+int tamanho_string(char str[]){ // calcular o tamanho de string
+  int tamanho = 0;
+  while (str[tamanho] != '\0') {
+    tamanho++;
+  }
+  return tamanho;
+};
+
+void rotaciona_string(char string_original[], int tamanho_original, int rotacao, char string_rotacionada[]){
+  for(int i = 0; i < 16; i++){
+    string_rotacionada[i] = string_original[(i + rotacao) % (tamanho_original)]; // Copia a string rotacionada
+    /* O operador de módulo nessa função serve para reiniciar a contagem quando (i + rotacao) > tamanho_original
+      Observe que, enquanto (i + rotacao) < tamanho_original, o resto da divisão (i + rotacao)/tamanho_original
+      será o próprio (i + rotacao). Quanto (i + rotacao) == tamanho_original, o resto é zero.
+      Quando tamanho_original > (i + rotacao) > 2*tamanho_original, o resto será novamente (i + rotacao).
+      O processo reinicia o valor da contagem em todo múltiplo do tamanho_original.
+    */
+  }
+  string_rotacionada[16] = '\0'; // Caractere nulo ao final da string
+};
+
+void delay(int ms){
+  for(volatile int i = 0; (i < ms*100); i++); // 10x menor que na implementação física devido ao clock
+};
 
 
 /*
