@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include "driver/gpio.h"
 #include "soc/gpio_reg.h"
-
 /*
 ******************* INÍCIO DO COMPONENTE LCD_DISPLAY ******************
 */
@@ -14,80 +13,44 @@ void LCD_escreve_strings(char str1[], char str2[]);
 /*
 ******************** FIM DO COMPONENTE LCD_DISPLAY ********************
 */
-
-int INTERRUPT_PIN = 10;
-int interrupt = 0;
-
-static void gpio_isr_handler(void* arg) {
-  interrupt = !interrupt;
-};
-
-void delay(int ms);
-int tamanho_string(char str[]);
-void rotaciona_string(char string_original[], int tamanho_original, int rotacao, char string_rotacionada[]);
-
-void app_main(){
-    gpio_config_t io_conf;
-    io_conf.intr_type = GPIO_INTR_NEGEDGE;
-    io_conf.pin_bit_mask = (1 << INTERRUPT_PIN);
-    io_conf.mode = GPIO_MODE_INPUT;
-    io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
-    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-
-    gpio_config(&io_conf);
-    gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
-    gpio_isr_handler_add(INTERRUPT_PIN, gpio_isr_handler, NULL);
-    
-    char string_original[] = "P1 24.2 - Microprocessadores "; // Esse espaço final pode ser tratado nas outras funções também (mas é mais simples colocá-lo aqui)
-    int tamanho_original = tamanho_string(string_original); // Calcula o tamanho da string original (pode usar sizeof também, mas cuidar com o caractere nulo)
-    char string_rotacionada[17]; // Cria um buffer para armazenar a string rotacionada no LCD com 16 posições (um caractere a mais para adicionar o nulo)
-
-    LCD_inicializa_4_bits(8, 9, 0, 1, 2, 3);
-    LCD_escreve_strings(string_original, " ");
-
-    int n = 0;
-
-    while(1){
-      while (interrupt == 1) {
-      rotaciona_string(string_original, tamanho_original, n, string_rotacionada);
-		  LCD_escreve_strings(string_rotacionada, " ");
-		  delay(5000);
-
-      if (n >= (tamanho_original)){
-        n = 1;
-      } else {
-        n++;
-      }
-	  }
-    };
-}
-
-int tamanho_string(char str[]){ // calcular o tamanho de string
-  int tamanho = 0;
-  while (str[tamanho] != '\0') {
-    tamanho++;
-  }
-  return tamanho;
-};
-
-void rotaciona_string(char string_original[], int tamanho_original, int rotacao, char string_rotacionada[]){
-  for(int i = 0; i < 16; i++){
-    string_rotacionada[i] = string_original[(i + rotacao) % (tamanho_original)]; // Copia a string rotacionada
-    /* O operador de módulo nessa função serve para reiniciar a contagem quando (i + rotacao) > tamanho_original
-      Observe que, enquanto (i + rotacao) < tamanho_original, o resto da divisão (i + rotacao)/tamanho_original
-      será o próprio (i + rotacao). Quanto (i + rotacao) == tamanho_original, o resto é zero.
-      Quando tamanho_original > (i + rotacao) > 2*tamanho_original, o resto será novamente (i + rotacao).
-      O processo reinicia o valor da contagem em todo múltiplo do tamanho_original.
-    */
-  }
-  string_rotacionada[16] = '\0'; // Caractere nulo ao final da string
-};
-
+int isInterrupt = 0;
 void delay(int ms){
-  for(volatile int i = 0; (i < ms*100); i++); // 10x menor que na implementação física devido ao clock
-};
-
-
+  for(volatile int i = 0; (i < ms*100); i++); // 10x menor devido ao clock
+}
+static void funcao_de_tratamento(void* arg) {
+  isInterrupt = 1;
+}
+void app_main(){
+  int n = 0;
+  char nstr[20];
+  char line1[] = "Bruno";
+  char line2[] = "Mamador";
+  char ittr1[] = "Interrupcaoo";
+  char ittr2[] = "Ativada";
+  
+  gpio_config_t io_conf; 
+  io_conf.intr_type = GPIO_INTR_POSEDGE;
+  io_conf.pin_bit_mask = (1 << 10); 
+  io_conf.mode = GPIO_MODE_INPUT; 
+  io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
+  io_conf.pull_up_en = GPIO_PULLUP_DISABLE; 
+  gpio_config(&io_conf);
+  gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
+  gpio_isr_handler_add(10, funcao_de_tratamento, NULL);
+  LCD_inicializa_4_bits(8, 9, 0, 1, 2, 3);
+  while(1){
+    if (isInterrupt == 1){
+      n=0;
+      delay(100);
+      isInterrupt = 0;
+    }
+    else{
+      LCD_escreve_strings("Contagem", nstr);
+    }
+    sprintf(nstr, "%d", n);  // Converte o número para string
+    n++;
+  }
+}
 /*
 ****************************************************************
 ****************************************************************
@@ -96,19 +59,15 @@ void delay(int ms){
 ****************************************************************
 ****************************************************************
 */
-
 static int codificar_portas_dados(char dado);
 static void inicializa_portas_saida_GPIO(int mascara_binaria);
 static void LCD_escreve(void );
 static void LCD_escreve_dado(char dado);
-
 typedef struct
 {
     char modo_4_bits, D0, D1, D2, D3, D4, D5, D6, D7, RS, EN;
 } LCD_struct;
-
 static LCD_struct LCD;
-
 static void inicializa_portas_saida_GPIO(int mascara_binaria){
     // Reinicialização de cada pino
     for (int i = 0; i < 32; i++) { // Considerando que int tem 32 bits
@@ -118,7 +77,6 @@ static void inicializa_portas_saida_GPIO(int mascara_binaria){
             // desconectando qualquer outra saída de periférico (similar a função que desenvolvemos no Roteiro 4).
         }
     }
-
     // Configuração como pinos de saída
     gpio_config_t io_conf;
     io_conf.pin_bit_mask = mascara_binaria; // Máscara para os pinos
@@ -126,10 +84,8 @@ static void inicializa_portas_saida_GPIO(int mascara_binaria){
     io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE; // Desativa pull-down
     io_conf.pull_up_en =  GPIO_PULLUP_DISABLE; // Desativa pull-up
     io_conf.intr_type = GPIO_INTR_DISABLE; // Interrupcao desativada
-
     gpio_config(&io_conf); // Atribui as configuracoes
 };
-
 static int codificar_portas_dados(char dado){
     // Essa função será responsável por receber o dado e codificá-lo 
     // para as portas correspondentes fornecidas na inicialização do componente
@@ -141,7 +97,6 @@ static int codificar_portas_dados(char dado){
     // para a posição correspondente de cada porta. Ao final, todos os valores são somados, resultando
     // no valor a ser passado pelos registradores W1TS e W1TC para escrita no barramento de dados
     int codificado = 0;
-
     if (LCD.modo_4_bits == 1) { // No modo 4 bits, apenas as portas D4, D5, D6 e D7 são utilizadas
         codificado = (((dado >> 0) & 1) << LCD.D4)
                 | (((dado >> 1) & 1) << LCD.D5)
@@ -157,10 +112,8 @@ static int codificar_portas_dados(char dado){
                 | (((dado >> 6) & 1) << LCD.D6)
                 | (((dado >> 7) & 1) << LCD.D7);
     }
-
     return codificado;
 };
-
 static void LCD_escreve(void){
     // Função responsável por executar o processo de envio do dado para o LCD
     // Inicializa o pino do Enable em 1, aguarda o tempo necessário e altera para 0
@@ -168,18 +121,15 @@ static void LCD_escreve(void){
     delay(50);
     REG_WRITE(GPIO_OUT_W1TC_REG, (1 << LCD.EN));
 }
-
 static void LCD_escreve_dado(char dado){
     // Função para escrita do dado no LCD. A função recebe o dado, codifica ele conforme as portas selecionadas na
     // inicialização e realiza o processo de escrita
     if (LCD.modo_4_bits == 1){
         // No caso do modo 4 bits, o dado é enviado em duas parcelas (primeiro os MSBs e depois os LSBs)
-
         // Envio dos 4 bits mais significativos
         REG_WRITE(GPIO_OUT_W1TC_REG, codificar_portas_dados(0xF)); // Limpa o barramento de dados (note que é necessário codificar nas portas corretas)
         REG_WRITE(GPIO_OUT_W1TS_REG, codificar_portas_dados((dado  >> 4) & 0xF)); // Escreve os 4 bits mais significativos no barramento
         LCD_escreve(); // Executa o procedimento para escrita
-
         // Envio dos 4 bits menos significativos
         REG_WRITE(GPIO_OUT_W1TC_REG, codificar_portas_dados(0xF)); // Limpa o barramento de dados
         REG_WRITE(GPIO_OUT_W1TS_REG, codificar_portas_dados(dado & 0xF)); // Escreve os bits menos significativos no barramento
@@ -191,13 +141,11 @@ static void LCD_escreve_dado(char dado){
         LCD_escreve(); // Executa o procedimento para escrita
     }
 };
-
 void LCD_escreve_comando(char comando){
     // Função utilizada para escrever um comando, dessa forma o pino RS deve estar em 0
     REG_WRITE(GPIO_OUT_W1TC_REG, (1 << LCD.RS)); // Coloca o pino RS em 0
     LCD_escreve_dado(comando); // Escreve o comando
 };
-
 void LCD_inicializa_8_bits(char rs, char en, char d0, char d1, char d2, char d3, char d4, char d5, char d6, char d7){
     // Função utilizada para inicialização do LCD em modo 8 bits
     
@@ -215,12 +163,10 @@ void LCD_inicializa_8_bits(char rs, char en, char d0, char d1, char d2, char d3,
     LCD_escreve_comando(0x01); // Limpa o display
     LCD_escreve_comando(0x02); // Retorna para o início
 };
-
 void LCD_inicializa_4_bits(char rs, char en, char d4, char d5, char d6, char d7){
     // Função utilizada para inicialização do LCD em modo 4 bits
     // Inicializa os pinos como saída
     inicializa_portas_saida_GPIO((1 << rs) | (1 << en) | (1 << d4) | (1 << d5) | (1 << d6) | (1 << d7));
-
     // Atribuição dos valores dos pinos fornecidos na inicialização para as variáveis globais estáticas do componente lcd_display
     LCD.RS = rs;
     LCD.EN = en;
@@ -234,28 +180,23 @@ void LCD_inicializa_4_bits(char rs, char en, char d4, char d5, char d6, char d7)
     LCD_escreve_comando(0x01); // Limpa o display
     LCD_escreve_comando(0x02); // Retorna para o início
 };
-
 void LCD_escreve_caractere(char caractere){
     // Função utilizada para escrever um caractere no display, dessa forma o pino RS deve estar em 1
     REG_WRITE(GPIO_OUT_W1TS_REG, (1 << LCD.RS)); // Atribui o valor 1 no pino RS
     LCD_escreve_dado(caractere); // Escreve o caractere
 };
-
 void LCD_escreve_string(char str[]){
     // Função utilizada para escrever uma sequência de caracteres (String)
     int i = 0;
-
     while ((str[i] != 0x0) && (i < 16)) { // Percorre toda a string e escreve cada um dos caracteres (limite de 16 caracteres)
         LCD_escreve_caractere(str[i]);
         i++;
     };
-
     while ((i < 16)) { // Se a string for menor que 16 caracteres, completa-os com espaços para limpar os respectivos caracteres no LCD
         LCD_escreve_caractere(' ');
         i++;
     };
 };
-
 void LCD_escreve_strings(char str1[], char str2[]){
     // Função utilizada para escrever duas strings, uma em cada linha do LCD
     LCD_escreve_comando(0x80); // Envia o comando para posicionar o cursor no início da primeira linha
